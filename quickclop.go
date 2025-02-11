@@ -58,16 +58,27 @@ func processFile(path string) error {
 
 	modified := false
 	ast.Inspect(file, func(n ast.Node) bool {
-		fn, ok := n.(*ast.FuncDecl)
-		if !ok || fn.Doc == nil {
+
+		typeSpec, ok := n.(*ast.TypeSpec)
+		if !ok {
 			return true
 		}
 
-		if !hasQuickClopComment(fn.Doc) {
-			return true
-		}
+		if structType, ok := typeSpec.Type.(*ast.StructType); ok {
+			fmt.Printf("处理结构体: %s (文件: %s), comment( %s)\n", typeSpec.Name.Name, path, typeSpec.Doc.Text())
+			// 先检查注释是否符合要求
+			if typeSpec.Doc == nil || typeSpec.Doc.Text() == "" {
+				return true // 没有注释直接跳过
+			}
 
-		log.Printf("处理函数: %s (文件: %s)", fn.Name.Name, path)
+			if !hasQuickClopComment(typeSpec.Doc) {
+				return true // 注释不符合要求跳过
+			}
+
+			// 符合条件才记录结构体
+			structDefs[typeSpec.Name.Name] = structType
+			log.Printf("处理结构体: %s (文件: %s)", typeSpec.Name.Name, path)
+		}
 
 		modified = true
 		return true
@@ -79,14 +90,21 @@ func processFile(path string) error {
 	return nil
 }
 
-func Main(path string) {
-	if path == "" {
-		path = "."
-	}
-	processDirectory(path)
-}
-
 func parseField(f *ast.Field) fieldInfo {
+	// 处理匿名字段
+	if len(f.Names) == 0 {
+		typeName := fmt.Sprintf("%s", f.Type)
+		// 如果是嵌套结构体
+		if structType := findStructDef(typeName, nil, ""); structType != nil {
+			return fieldInfo{
+				Name:       typeName,
+				Type:       typeName,
+				IsNested:   true,
+				structType: structType,
+			}
+		}
+	}
+
 	info := fieldInfo{
 		Name: f.Names[0].Name,
 		Type: fmt.Sprintf("%s", f.Type),
@@ -120,6 +138,11 @@ func parseField(f *ast.Field) fieldInfo {
 		info.Long = strings.ToLower(info.Name)
 	}
 
+	// 如果是嵌套结构体
+	if structType := findStructDef(info.Type, nil, ""); structType != nil {
+		info.IsNested = true
+	}
+
 	return info
 }
 
@@ -130,4 +153,12 @@ func hasArgs(fields []fieldInfo) bool {
 		}
 	}
 	return false
+}
+
+// 入口
+func Main(path string) {
+	if path == "" {
+		path = "."
+	}
+	processDirectory(path)
 }

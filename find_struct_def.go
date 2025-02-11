@@ -1,5 +1,4 @@
 package quickclop
-package mapstruct
 
 import (
 	"go/ast"
