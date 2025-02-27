@@ -1,7 +1,6 @@
 package basic
 
-// test
-// test
+// pcurl represents a curl-like HTTP client with various options for making HTTP requests.
 // :quickclop
 type pcurl struct {
 	Method        string   `clop:"-X; --request" usage:"Specify request command to use"`

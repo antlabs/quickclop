@@ -1,6 +1,8 @@
 package quickclop
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -8,36 +10,113 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 )
 
-func processDirectory(rootDir string) error {
-	return filepath.Walk(rootDir, walker)
+// 解析字段标签
+func parseTag(tag string) map[string]string {
+	// 去除首尾的反引号
+	tag = strings.Trim(tag, "`")
+
+	// 解析标签
+	result := make(map[string]string)
+	for tag != "" {
+		// 跳过前导空格
+		i := 0
+		for i < len(tag) && tag[i] == ' ' {
+			i++
+		}
+		tag = tag[i:]
+		if tag == "" {
+			break
+		}
+
+		// 查找键
+		i = 0
+		for i < len(tag) && tag[i] != ':' {
+			i++
+		}
+		if i == 0 || i+1 >= len(tag) || tag[i+1] != '"' {
+			break
+		}
+		key := tag[:i]
+		tag = tag[i+1:]
+
+		// 查找值
+		i = 1
+		for i < len(tag) && tag[i] != '"' {
+			if tag[i] == '\\' && i+1 < len(tag) {
+				i++
+			}
+			i++
+		}
+		if i >= len(tag) {
+			break
+		}
+		value := tag[1:i]
+		tag = tag[i+1:]
+
+		// 跳过后续空格和逗号
+		i = 0
+		for i < len(tag) && (tag[i] == ' ' || tag[i] == ',') {
+			i++
+		}
+		tag = tag[i:]
+
+		result[key] = value
+	}
+
+	return result
 }
 
-func walker(path string, info os.FileInfo, err error) error {
+// 检查是否有位置参数
+func hasArgs(fields []FieldInfo) bool {
+	for _, f := range fields {
+		if f.Args {
+			return true
+		}
+	}
+	return false
+}
+
+// Main 是主入口函数
+func Main(path string) {
+	// 获取当前目录下的所有 Go 文件
+	files, err := getGoFiles(path)
 	if err != nil {
-		return fmt.Errorf("access path %s: %w", path, err)
+		log.Fatalf("获取 Go 文件失败: %v", err)
 	}
 
-	if info.IsDir() || !strings.HasSuffix(path, ".go") {
-		return nil
+	// 处理每个文件
+	for _, file := range files {
+		fmt.Printf("Processing file: %s\n", file)
+		processFile(file)
 	}
-
-	fmt.Printf("Processing file: %s\n", path)
-	return processFile(path)
 }
 
-func processFile(path string) error {
+// 处理单个文件
+func processFile(filePath string) {
+	// 解析文件
 	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, path, nil, parser.ParseComments|parser.AllErrors)
+	file, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
 	if err != nil {
-		return fmt.Errorf("解析文件失败: %w", err)
+		log.Printf("解析文件 %s 失败: %v", filePath, err)
+		return
 	}
 
-	// 第一步：收集所有结构体定义
-	structDefs := make(map[string]*ast.StructType)
+	// 获取包名
+	packageName := file.Name.Name
+
+	// 生成输出文件路径
+	outputFile := generateOutputFilePath(filePath)
+
+	// 检查是否有需要处理的结构体
+	var structsToProcess []struct {
+		Name string
+		Type *ast.StructType
+	}
+
+	// 查找带有 :quickclop 注释的结构体
 	for _, decl := range file.Decls {
 		genDecl, ok := decl.(*ast.GenDecl)
 		if !ok || genDecl.Tok != token.TYPE {
@@ -50,115 +129,437 @@ func processFile(path string) error {
 				continue
 			}
 
-			if structType, ok := typeSpec.Type.(*ast.StructType); ok {
-				structDefs[typeSpec.Name.Name] = structType
-			}
-		}
-	}
-
-	modified := false
-	ast.Inspect(file, func(n ast.Node) bool {
-
-		typeSpec, ok := n.(*ast.TypeSpec)
-		if !ok {
-			return true
-		}
-
-		if structType, ok := typeSpec.Type.(*ast.StructType); ok {
-			fmt.Printf("处理结构体: %s (文件: %s), comment( %s)\n", typeSpec.Name.Name, path, typeSpec.Doc.Text())
-			// 先检查注释是否符合要求
-			if typeSpec.Doc == nil || typeSpec.Doc.Text() == "" {
-				return true // 没有注释直接跳过
+			structType, ok := typeSpec.Type.(*ast.StructType)
+			if !ok {
+				continue
 			}
 
-			if !hasQuickClopComment(typeSpec.Doc) {
-				return true // 注释不符合要求跳过
-			}
+			// 检查是否有 :quickclop 注释
+			if genDecl.Doc != nil {
+				hasQuickClop := false
+				for _, comment := range genDecl.Doc.List {
+					if strings.Contains(comment.Text, ":quickclop") {
+						hasQuickClop = true
+						break
+					}
+				}
 
-			// 符合条件才记录结构体
-			structDefs[typeSpec.Name.Name] = structType
-			log.Printf("处理结构体: %s (文件: %s)", typeSpec.Name.Name, path)
-		}
+				if hasQuickClop {
+					structName := typeSpec.Name.Name
+					fmt.Printf("处理结构体: %s (文件: %s), comment(%s)\n", structName, filePath, genDecl.Doc.Text())
+					log.Printf("处理结构体: %s (文件: %s)", structName, filePath)
 
-		modified = true
-		return true
-	})
-
-	if modified {
-		// return safeWriteFile(path, fset, file)
-	}
-	return nil
-}
-
-func parseField(f *ast.Field) fieldInfo {
-	// 处理匿名字段
-	if len(f.Names) == 0 {
-		typeName := fmt.Sprintf("%s", f.Type)
-		// 如果是嵌套结构体
-		if structType := findStructDef(typeName, nil, ""); structType != nil {
-			return fieldInfo{
-				Name:       typeName,
-				Type:       typeName,
-				IsNested:   true,
-				structType: structType,
-			}
-		}
-	}
-
-	info := fieldInfo{
-		Name: f.Names[0].Name,
-		Type: fmt.Sprintf("%s", f.Type),
-	}
-
-	if f.Tag != nil {
-		tag := strings.Trim(f.Tag.Value, "`")
-		clopTag := reflect.StructTag(tag).Get("clop")
-		if clopTag != "" {
-			parts := strings.Split(clopTag, ",")
-			for _, part := range parts {
-				kv := strings.SplitN(part, "=", 2)
-				switch kv[0] {
-				case "short":
-					info.Short = kv[1]
-				case "long":
-					info.Long = kv[1]
-				case "usage":
-					info.Usage = kv[1]
-				case "default":
-					info.Default = kv[1]
-				case "args":
-					info.Args = true
+					// 添加到待处理列表
+					structsToProcess = append(structsToProcess, struct {
+						Name string
+						Type *ast.StructType
+					}{
+						Name: structName,
+						Type: structType,
+					})
 				}
 			}
 		}
 	}
 
-	// Set default long name if not specified
-	if info.Long == "" && info.Short != "" {
-		info.Long = strings.ToLower(info.Name)
+	// 如果没有需要处理的结构体，直接返回
+	if len(structsToProcess) == 0 {
+		return
 	}
 
-	// 如果是嵌套结构体
-	if structType := findStructDef(info.Type, nil, ""); structType != nil {
-		info.IsNested = true
+	// 创建或清空输出文件
+	f, err := os.OpenFile(outputFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		log.Printf("创建输出文件失败: %v", err)
+		return
+	}
+
+	// 写入包声明和导入语句
+	fmt.Fprintf(f, "// Code generated by clop-gen; DO NOT EDIT.\n\n")
+	fmt.Fprintf(f, "package %s\n\n", packageName)
+	fmt.Fprintf(f, "import (\n")
+	fmt.Fprintf(f, "\t\"fmt\"\n")
+	fmt.Fprintf(f, "\t\"os\"\n")
+	fmt.Fprintf(f, "\t\"strconv\"\n")
+	fmt.Fprintf(f, "\t\"strings\"\n")
+	fmt.Fprintf(f, "\t\"time\"\n")
+	fmt.Fprintf(f, ")\n\n")
+	f.Close() // Close the file after writing the header
+
+	// 处理每个结构体
+	for _, s := range structsToProcess {
+		// 生成代码
+		err := generateCode(s.Name, s.Type, outputFile, packageName, file, fset)
+		if err != nil {
+			log.Printf("生成代码失败: %v", err)
+			return
+		}
+	}
+
+	log.Printf("生成代码文件: %s", outputFile)
+}
+
+// 获取指定路径下的所有 Go 文件
+func getGoFiles(path string) ([]string, error) {
+	// 检查路径是否为文件
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+
+	// 如果是文件，直接返回
+	if !fileInfo.IsDir() {
+		if strings.HasSuffix(path, ".go") {
+			return []string{path}, nil
+		}
+		return nil, fmt.Errorf("不是 Go 文件: %s", path)
+	}
+
+	// 如果是目录，递归获取所有 Go 文件
+	var files []string
+	err = filepath.Walk(path, func(p string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() && strings.HasSuffix(p, ".go") && !strings.HasSuffix(p, "_clop.go") {
+			files = append(files, p)
+		}
+		return nil
+	})
+
+	return files, err
+}
+
+// 生成输出文件路径
+func generateOutputFilePath(inputPath string) string {
+	dir := filepath.Dir(inputPath)
+	base := filepath.Base(inputPath)
+	ext := filepath.Ext(base)
+	name := base[:len(base)-len(ext)]
+	return filepath.Join(dir, name+"_clop.go")
+}
+
+// FieldInfo 存储字段信息
+type FieldInfo struct {
+	Name       string // 字段名称
+	Type       string // 字段类型
+	Tag        string // 原始标签
+	Short      string // 短选项，如 -h
+	Long       string // 长选项，如 --help
+	Usage      string // 使用说明
+	Default    string // 默认值
+	Args       bool   // 是否为位置参数
+	Required   bool   // 是否必需
+	IsNested   bool   // 是否为嵌套结构体
+	ParseFunc  string // 解析函数名
+	structType *ast.StructType
+	CmdName    string
+}
+
+// 解析字段
+func parseField(f *ast.Field, file *ast.File, fset *token.FileSet) FieldInfo {
+	info := FieldInfo{}
+
+	// 获取字段名
+	if len(f.Names) > 0 {
+		info.Name = f.Names[0].Name
+	} else {
+		// 匿名字段，使用类型名作为字段名
+		switch t := f.Type.(type) {
+		case *ast.Ident:
+			info.Name = t.Name
+		case *ast.SelectorExpr:
+			info.Name = t.Sel.Name
+		case *ast.StarExpr:
+			if ident, ok := t.X.(*ast.Ident); ok {
+				info.Name = ident.Name
+			}
+		}
+	}
+
+	// 获取字段类型
+	switch t := f.Type.(type) {
+	case *ast.Ident:
+		info.Type = t.Name
+	case *ast.SelectorExpr:
+		if x, ok := t.X.(*ast.Ident); ok {
+			info.Type = x.Name + "." + t.Sel.Name
+		}
+	case *ast.StarExpr:
+		switch xt := t.X.(type) {
+		case *ast.Ident:
+			info.Type = "*" + xt.Name
+		case *ast.SelectorExpr:
+			if x, ok := xt.X.(*ast.Ident); ok {
+				info.Type = "*" + x.Name + "." + xt.Sel.Name
+			}
+		}
+	case *ast.ArrayType:
+		if ident, ok := t.Elt.(*ast.Ident); ok {
+			info.Type = "[]" + ident.Name
+		}
+	}
+
+	// 获取字段标签
+	if f.Tag != nil {
+		tag := f.Tag.Value
+		// 去掉首尾的反引号
+		tag = strings.Trim(tag, "`")
+
+		// 检查是否有clop标签
+		if strings.Contains(tag, "clop:") {
+			// 提取clop标签内容
+			clopParts := strings.Split(tag, "clop:")
+			if len(clopParts) > 1 {
+				clopTag := clopParts[1]
+				if strings.Contains(clopTag, "\"") {
+					clopTagParts := strings.Split(clopTag, "\"")
+					if len(clopTagParts) > 1 {
+						clopTag = clopTagParts[1]
+					}
+				}
+				
+				// 解析短选项和长选项
+				if strings.Contains(clopTag, "-") && !strings.HasPrefix(clopTag, "args") {
+					parts := strings.Split(clopTag, ";")
+					for _, part := range parts {
+						part = strings.TrimSpace(part)
+						if strings.HasPrefix(part, "-") && !strings.HasPrefix(part, "--") {
+							// 短选项
+							info.Short = strings.TrimPrefix(part, "-")
+						} else if strings.HasPrefix(part, "--") {
+							// 长选项
+							info.Long = strings.TrimPrefix(part, "--")
+						}
+					}
+				} else if strings.HasPrefix(clopTag, "args") {
+					// 位置参数
+					info.Args = true
+					if strings.Contains(clopTag, "=") {
+						argsParts := strings.Split(clopTag, "=")
+						if len(argsParts) > 1 {
+							info.Name = argsParts[1]
+						}
+					}
+				}
+			}
+			
+			// 解析usage
+			if strings.Contains(tag, "usage:") {
+				usageParts := strings.Split(tag, "usage:")
+				if len(usageParts) > 1 {
+					usageTag := usageParts[1]
+					if strings.Contains(usageTag, "\"") {
+						usageTagParts := strings.Split(usageTag, "\"")
+						if len(usageTagParts) > 1 {
+							info.Usage = usageTagParts[1]
+						}
+					}
+				}
+			}
+			
+			// 解析default
+			if strings.Contains(tag, "default:") {
+				defaultParts := strings.Split(tag, "default:")
+				if len(defaultParts) > 1 {
+					defaultTag := defaultParts[1]
+					if strings.Contains(defaultTag, "\"") {
+						defaultTagParts := strings.Split(defaultTag, "\"")
+						if len(defaultTagParts) > 1 {
+							info.Default = defaultTagParts[1]
+						}
+					}
+				}
+			}
+			
+			// 解析required
+			if strings.Contains(tag, "required") {
+				info.Required = true
+			}
+		}
+
+		// 获取subcmd标签
+		if strings.Contains(tag, "subcmd:") {
+			subcmdParts := strings.Split(tag, "subcmd:")
+			if len(subcmdParts) > 1 {
+				subcmdTag := subcmdParts[1]
+				if strings.Contains(subcmdTag, "\"") {
+					subcmdTagParts := strings.Split(subcmdTag, "\"")
+					if len(subcmdTagParts) > 1 {
+						info.IsNested = true
+						info.CmdName = subcmdTagParts[1]
+					}
+				}
+			}
+		}
+	}
+
+	// 检查是否是嵌套结构体
+	if info.Type != "" && !isBasicType(info.Type) && !isTimeType(info.Type) {
+		// 查找结构体定义
+		structDef := findStructDef(info.Type, file, fset.Position(f.Pos()).Filename, "")
+		if structDef != nil {
+			info.structType = structDef
+			info.IsNested = true
+		}
 	}
 
 	return info
 }
 
-func hasArgs(fields []fieldInfo) bool {
-	for _, f := range fields {
-		if f.Args {
-			return true
-		}
+// 检查是否是基本类型
+func isBasicType(typeName string) bool {
+	basicTypes := map[string]bool{
+		"bool":      true,
+		"int":       true,
+		"int8":      true,
+		"int16":     true,
+		"int32":     true,
+		"int64":     true,
+		"uint":      true,
+		"uint8":     true,
+		"uint16":    true,
+		"uint32":    true,
+		"uint64":    true,
+		"float32":   true,
+		"float64":   true,
+		"string":    true,
+		"byte":      true,
+		"rune":      true,
+		"*bool":     true,
+		"*int":      true,
+		"*int8":     true,
+		"*int16":    true,
+		"*int32":    true,
+		"*int64":    true,
+		"*uint":     true,
+		"*uint8":    true,
+		"*uint16":   true,
+		"*uint32":   true,
+		"*uint64":   true,
+		"*float32":  true,
+		"*float64":  true,
+		"*string":   true,
+		"*byte":     true,
+		"*rune":     true,
+		"[]string":  true,
+		"[]int":     true,
+		"[]float64": true,
+		"[]bool":    true,
 	}
-	return false
+
+	return basicTypes[typeName]
 }
 
-// 入口
-func Main(path string) {
-	if path == "" {
-		path = "."
+// 检查是否是时间类型
+func isTimeType(typeName string) bool {
+	timeTypes := map[string]bool{
+		"time.Time":      true,
+		"time.Duration":  true,
+		"*time.Time":     true,
+		"*time.Duration": true,
 	}
-	processDirectory(path)
+
+	return timeTypes[typeName]
+}
+
+// 生成代码
+func generateCode(structName string, structType *ast.StructType, outputFile string, packageName string, file *ast.File, fset *token.FileSet) error {
+	// 解析结构体字段
+	fields := []FieldInfo{}
+	subcommands := []FieldInfo{}
+
+	// 遍历字段
+	for _, field := range structType.Fields.List {
+		// 解析字段信息
+		info := parseField(field, file, fset)
+
+		// 处理嵌套结构体
+		if info.IsNested {
+			// 检查是否有子命令标签
+			_, _ = parseSubcommandTag(field.Tag.Value)
+			// 添加到子命令列表
+			subcommands = append(subcommands, info)
+		} else {
+			// 普通字段，添加到字段列表
+			fields = append(fields, info)
+		}
+	}
+
+	// 检查是否有子命令
+	hasSubcmds := len(subcommands) > 0
+
+	// 检查是否有位置参数字段
+	hasArgsField := hasArgs(fields)
+
+	// 准备模板数据
+	data := struct {
+		StructName     string
+		Fields         []FieldInfo
+		Subcommands    []FieldInfo
+		HasSubcommands bool
+		HasArgsField   bool
+	}{
+		StructName:     structName,
+		Fields:         fields,
+		Subcommands:    subcommands,
+		HasSubcommands: hasSubcmds,
+		HasArgsField:   hasArgsField,
+	}
+
+	fmt.Printf("fields: %v\n", fields)
+	// 打开文件以追加内容
+	f, err := os.OpenFile(outputFile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("打开输出文件失败: %w", err)
+	}
+
+	// 执行模板
+	var buf bytes.Buffer
+	err = tmpl.Execute(&buf, data)
+	if err != nil {
+		return fmt.Errorf("执行模板失败: %w", err)
+	}
+
+	// 处理生成的代码，移除多余的空行
+	scanner := bufio.NewScanner(&buf)
+	var lines []string
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+
+	// 移除连续的空行，保留最多一个空行
+	var result []string
+	emptyLineCount := 0
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			emptyLineCount++
+			if emptyLineCount <= 1 {
+				result = append(result, line)
+			}
+		} else {
+			emptyLineCount = 0
+			result = append(result, line)
+		}
+	}
+
+	// 写入处理后的代码
+	f.WriteString(strings.Join(result, "\n"))
+
+	f.Close()
+
+	log.Printf("生成代码文件: %s", outputFile)
+	return nil
+}
+
+func extractTagValue(tag string, key string) string {
+	keyPrefix := key + ":"
+	parts := strings.Split(tag, " ")
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if strings.HasPrefix(part, keyPrefix) {
+			return strings.TrimPrefix(part, keyPrefix)
+		}
+	}
+	return ""
 }

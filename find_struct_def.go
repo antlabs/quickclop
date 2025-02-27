@@ -15,26 +15,56 @@ import (
 var pkgCache Map[string, []*ast.File]
 
 // findStructDef 优化后的实现
-func findStructDef(typeName string, file *ast.File, path string) *ast.StructType {
-	if file == nil {
-		log.Printf("File is nil, cannot find struct definition for %s", typeName)
+func findStructDef(typeName string, file *ast.File, path string, subcommand string) *ast.StructType {
+	// 基本类型不需要查找结构体定义
+	if isBasicType(typeName) {
 		return nil
 	}
 
-	// 1. 尝试从当前文件查找
-	if structType := findInCurrentFile(typeName, file); structType != nil {
-		return structType
+	// 时间类型不需要查找结构体定义
+	if isTimeType(typeName) {
+		return nil
 	}
 
-	// 2. 解析包路径和类型名（处理形如 pkg.Type 的类型）
-	pkgPath, typeName := parsePkgType(typeName)
-	if pkgPath != "" {
-		// 处理外部包类型
-		return findInImportedPackage(pkgPath, typeName, file)
+	// 处理指针类型
+	if strings.HasPrefix(typeName, "*") {
+		typeName = typeName[1:]
 	}
 
-	// 3. 尝试从同一包的其他文件查找
-	return findInCurrentPackage(typeName, file, path)
+	// 处理切片类型
+	if strings.HasPrefix(typeName, "[]") {
+		return nil
+	}
+
+	// 处理映射类型
+	if strings.HasPrefix(typeName, "map[") {
+		return nil
+	}
+
+	// 如果提供了文件，则在该文件中查找
+	if file != nil {
+		for _, decl := range file.Decls {
+			genDecl, ok := decl.(*ast.GenDecl)
+			if !ok || genDecl.Tok != token.TYPE {
+				continue
+			}
+
+			for _, spec := range genDecl.Specs {
+				typeSpec, ok := spec.(*ast.TypeSpec)
+				if !ok {
+					continue
+				}
+
+				if typeSpec.Name.Name == typeName {
+					if structType, ok := typeSpec.Type.(*ast.StructType); ok {
+						return structType
+					}
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 // 1. 在当前文件查找
