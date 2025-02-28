@@ -38,7 +38,7 @@ func main() {
 	}
 
 	// 调用 quickclop 库函数
-	if err := quickclop.Generate(opts.InputFile, opts.OutputFile, opts.StructName, opts.ShellType, opts.Completion); err != nil {
+	if err := quickclop.Generate(&opts); err != nil {
 		log.Fatalf("生成代码失败: %v", err)
 	}
 }

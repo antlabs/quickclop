@@ -192,8 +192,8 @@ complete -c {{ $.AppName }} -f -n "__fish_use_subcommand" -a {{ .Name }} -d "{{ 
 
 # {{ .Name }} 子命令选项
 {{ range .Fields }}{{ if not .IsNested }}{{ if or .Short .Long }}
-{{ if .Short }}complete -c {{ $.AppName }} -n "__fish_seen_subcommand_from {{ $.Name }}" -s {{ .Short }}{{ if not (eq .Type "bool") }} -r{{ end }}{{ if .Long }} -l {{ .Long }}{{ end }} -d "{{ .Usage }}"{{ if eq .Completion "file" }} -F{{ else if eq .Completion "dir" }} -F -a "(__fish_complete_directories)"{{ else if eq .Completion "custom" }} -a "{{ .CompletionValues }}"{{ end }}{{ end }}
-{{ if and (not .Short) .Long }}complete -c {{ $.AppName }} -n "__fish_seen_subcommand_from {{ $.Name }}" -l {{ .Long }}{{ if not (eq .Type "bool") }} -r{{ end }} -d "{{ .Usage }}"{{ if eq .Completion "file" }} -F{{ else if eq .Completion "dir" }} -F -a "(__fish_complete_directories)"{{ else if eq .Completion "custom" }} -a "{{ .CompletionValues }}"{{ end }}{{ end }}
+{{ if .Short }}complete -c {{ $.AppName }} -n "__fish_seen_subcommand_from {{ .Name }}" -s {{ .Short }}{{ if not (eq .Type "bool") }} -r{{ end }}{{ if .Long }} -l {{ .Long }}{{ end }} -d "{{ .Usage }}"{{ if eq .Completion "file" }} -F{{ else if eq .Completion "dir" }} -F -a "(__fish_complete_directories)"{{ else if eq .Completion "custom" }} -a "{{ .CompletionValues }}"{{ end }}{{ end }}
+{{ if and (not .Short) .Long }}complete -c {{ $.AppName }} -n "__fish_seen_subcommand_from {{ .Name }}" -l {{ .Long }}{{ if not (eq .Type "bool") }} -r{{ end }} -d "{{ .Usage }}"{{ if eq .Completion "file" }} -F{{ else if eq .Completion "dir" }} -F -a "(__fish_complete_directories)"{{ else if eq .Completion "custom" }} -a "{{ .CompletionValues }}"{{ end }}{{ end }}
 {{ end }}{{ end }}{{ end }}
 {{ end }}
 {{ end }}

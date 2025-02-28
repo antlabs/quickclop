@@ -11,7 +11,7 @@ type pcurl struct {
 	Form          []string `clop:"-F; --form" usage:"Specify multipart MIME data"`
 	URL2          string   `clop:"args=url2" usage:"url2"`
 	URL           string   `clop:"--url" usage:"URL to work with"`
-	Location      bool     `clop:"-L; --location" usage:"Follow redirects"` //TODO
+	Location      bool     `clop:"-L; --location" usage:"Follow redirects"`
 	DataUrlencode []string `clop:"--data-urlencode" usage:"HTTP POST data url encoded"`
 
 	Compressed bool `clop:"--compressed" usage:"Request compressed response"`
