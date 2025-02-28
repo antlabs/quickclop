@@ -11,8 +11,7 @@ import (
 )
 
 // 新增缓存：包路径 -> 包语法树
-// var pkgCache = make(map[string][]*ast.File)
-var pkgCache Map[string, []*ast.File]
+var pkgCache = make(map[string][]*ast.File)
 
 // findStructDef 优化后的实现
 func findStructDef(typeName string, file *ast.File, path string, subcommand string) *ast.StructType {
@@ -122,7 +121,7 @@ func findInCurrentPackage(typeName string, file *ast.File, path string) *ast.Str
 
 	// 检查缓存
 
-	files, ok := pkgCache.Load(pkgPath)
+	files, ok := pkgCache[pkgPath]
 
 	if !ok {
 		// 未缓存，加载包信息
@@ -142,7 +141,7 @@ func findInCurrentPackage(typeName string, file *ast.File, path string) *ast.Str
 			syntax = append(syntax, pkg.Syntax...)
 		}
 
-		pkgCache.Store(pkgPath, syntax)
+		pkgCache[pkgPath] = syntax
 		files = syntax
 	}
 

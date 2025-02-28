@@ -8,7 +8,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"encoding/json"
+	"gopkg.in/yaml.v3"
+	"github.com/BurntSushi/toml"
+	"path/filepath"
 )
+
 
 
 // 子命令处理函数类型
@@ -21,12 +26,20 @@ type SubcommandInfo struct {
 	Func        CommandFunc
 }
 
+
 // CLI的Parse方法，用于解析命令行参数
 func (c *CLI) Parse(args []string) error {
 	if len(args) == 0 {
 		args = os.Args[1:]
 	}
 
+	// 设置默认值
+	
+
+	// 从环境变量中读取值
+	
+
+	
 	// 检查是否有子命令
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		subcommand := args[0]
@@ -45,14 +58,44 @@ func (c *CLI) Parse(args []string) error {
 		}
 	}
 	
+
+	// 检查是否指定了配置文件
+	var configFile string
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--config" || args[i] == "-c" {
+			if i+1 < len(args) {
+				configFile = args[i+1]
+				// 移除 --config 和它的值，避免后续解析错误
+				if i+2 < len(args) {
+					args = append(args[:i], args[i+2:]...)
+				} else {
+					args = args[:i]
+				}
+				i--
+				break
+			}
+		}
+	}
+
+	// 从配置文件加载选项
+	if configFile != "" {
+		if err := c.loadFromConfigFile(configFile); err != nil {
+			return fmt.Errorf("加载配置文件失败: %w", err)
+		}
+	}
+
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch {
+		case arg == "--help" || arg == "-h":
+			c.Usage()
+			os.Exit(0)
 		
 		case arg == "-v" || arg == "--verbose":
 			
 			c.Verbose = true
 			
+		
 		case arg == "-c" || arg == "--config":
 			
 			if i+1 >= len(args) {
@@ -63,6 +106,7 @@ func (c *CLI) Parse(args []string) error {
 			
 			i++
 			
+		
 		case arg == "-t" || arg == "--timeout":
 			
 			if i+1 >= len(args) {
@@ -77,6 +121,8 @@ func (c *CLI) Parse(args []string) error {
 			
 			i++
 			
+		
+		
 		default:
 			return fmt.Errorf("unknown option: %s", arg)
 		}
@@ -94,20 +140,82 @@ SUBCOMMANDS:
     Client    
 
 OPTIONS:
+    -c, --config    指定配置文件路径 (支持 JSON, YAML, TOML)
+    -h, --help      显示帮助信息
     -v, --verbose    Enable verbose output
     -c, --config    Configuration file path
     -t, --timeout    Operation timeout
 `)
 }
+
+func (c *CLI) loadFromConfigFile(configFile string) error {
+	data, err := os.ReadFile(configFile)
+	if err != nil {
+		return fmt.Errorf("读取配置文件失败: %w", err)
+	}
+
+	// 根据文件扩展名选择解析方式
+	ext := filepath.Ext(configFile)
+	switch strings.ToLower(ext) {
+	case ".json":
+		return json.Unmarshal(data, c)
+	case ".yaml", ".yml":
+		return yaml.Unmarshal(data, c)
+	case ".toml":
+		_, err := toml.Decode(string(data), c)
+		return err
+	default:
+		return fmt.Errorf("不支持的配置文件格式: %s", ext)
+	}
+}
+
+
+
 // ServerCmd的Parse方法，用于解析命令行参数
 func (c *ServerCmd) Parse(args []string) error {
 	if len(args) == 0 {
 		args = os.Args[1:]
 	}
 
+	// 设置默认值
+	
+
+	// 从环境变量中读取值
+	
+
+	
+
+	// 检查是否指定了配置文件
+	var configFile string
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--config" || args[i] == "-c" {
+			if i+1 < len(args) {
+				configFile = args[i+1]
+				// 移除 --config 和它的值，避免后续解析错误
+				if i+2 < len(args) {
+					args = append(args[:i], args[i+2:]...)
+				} else {
+					args = args[:i]
+				}
+				i--
+				break
+			}
+		}
+	}
+
+	// 从配置文件加载选项
+	if configFile != "" {
+		if err := c.loadFromConfigFile(configFile); err != nil {
+			return fmt.Errorf("加载配置文件失败: %w", err)
+		}
+	}
+
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch {
+		case arg == "--help" || arg == "-h":
+			c.Usage()
+			os.Exit(0)
 		
 		case arg == "-p" || arg == "--port":
 			
@@ -123,6 +231,7 @@ func (c *ServerCmd) Parse(args []string) error {
 			
 			i++
 			
+		
 		case arg == "-h" || arg == "--host":
 			
 			if i+1 >= len(args) {
@@ -133,6 +242,7 @@ func (c *ServerCmd) Parse(args []string) error {
 			
 			i++
 			
+		
 		case arg == "--cert":
 			
 			if i+1 >= len(args) {
@@ -143,6 +253,7 @@ func (c *ServerCmd) Parse(args []string) error {
 			
 			i++
 			
+		
 		case arg == "--key":
 			
 			if i+1 >= len(args) {
@@ -153,6 +264,7 @@ func (c *ServerCmd) Parse(args []string) error {
 			
 			i++
 			
+		
 		case arg == "--start-at":
 			
 			if i+1 >= len(args) {
@@ -167,6 +279,7 @@ func (c *ServerCmd) Parse(args []string) error {
 			
 			i++
 			
+		
 		case arg == "--interval":
 			
 			if i+1 >= len(args) {
@@ -181,6 +294,8 @@ func (c *ServerCmd) Parse(args []string) error {
 			
 			i++
 			
+		
+		
 		default:
 			return fmt.Errorf("unknown option: %s", arg)
 		}
@@ -194,6 +309,8 @@ func (c *ServerCmd) Usage() {
   myapp [OPTIONS]
 
 OPTIONS:
+    -c, --config    指定配置文件路径 (支持 JSON, YAML, TOML)
+    -h, --help      显示帮助信息
     -p, --port    Server port
     -h, --host    Server host
     --cert    TLS certificate file
@@ -202,15 +319,75 @@ OPTIONS:
     --interval    Health check interval
 `)
 }
+
+func (c *ServerCmd) loadFromConfigFile(configFile string) error {
+	data, err := os.ReadFile(configFile)
+	if err != nil {
+		return fmt.Errorf("读取配置文件失败: %w", err)
+	}
+
+	// 根据文件扩展名选择解析方式
+	ext := filepath.Ext(configFile)
+	switch strings.ToLower(ext) {
+	case ".json":
+		return json.Unmarshal(data, c)
+	case ".yaml", ".yml":
+		return yaml.Unmarshal(data, c)
+	case ".toml":
+		_, err := toml.Decode(string(data), c)
+		return err
+	default:
+		return fmt.Errorf("不支持的配置文件格式: %s", ext)
+	}
+}
+
+
+
 // ClientCmd的Parse方法，用于解析命令行参数
 func (c *ClientCmd) Parse(args []string) error {
 	if len(args) == 0 {
 		args = os.Args[1:]
 	}
 
+	// 设置默认值
+	
+
+	// 从环境变量中读取值
+	
+
+	
+
+	// 检查是否指定了配置文件
+	var configFile string
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--config" || args[i] == "-c" {
+			if i+1 < len(args) {
+				configFile = args[i+1]
+				// 移除 --config 和它的值，避免后续解析错误
+				if i+2 < len(args) {
+					args = append(args[:i], args[i+2:]...)
+				} else {
+					args = args[:i]
+				}
+				i--
+				break
+			}
+		}
+	}
+
+	// 从配置文件加载选项
+	if configFile != "" {
+		if err := c.loadFromConfigFile(configFile); err != nil {
+			return fmt.Errorf("加载配置文件失败: %w", err)
+		}
+	}
+
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch {
+		case arg == "--help" || arg == "-h":
+			c.Usage()
+			os.Exit(0)
 		
 		case arg == "-s" || arg == "--server":
 			
@@ -222,6 +399,7 @@ func (c *ClientCmd) Parse(args []string) error {
 			
 			i++
 			
+		
 		case arg == "-t" || arg == "--timeout":
 			
 			if i+1 >= len(args) {
@@ -236,6 +414,7 @@ func (c *ClientCmd) Parse(args []string) error {
 			
 			i++
 			
+		
 		case arg == "-r" || arg == "--retries":
 			
 			if i+1 >= len(args) {
@@ -250,10 +429,19 @@ func (c *ClientCmd) Parse(args []string) error {
 			
 			i++
 			
+		
+		
 		case !strings.HasPrefix(arg, "-"):
+			
+			
+			
+			
 			
 			c.Operation = arg
 			
+			
+			
+		
 		default:
 			return fmt.Errorf("unknown option: %s", arg)
 		}
@@ -267,11 +455,34 @@ func (c *ClientCmd) Usage() {
   myapp [OPTIONS] [ARGS]
 
 OPTIONS:
+    -c, --config    指定配置文件路径 (支持 JSON, YAML, TOML)
+    -h, --help      显示帮助信息
     -s, --server    Server address
     -t, --timeout    Connection timeout
     -r, --retries    Number of retries
 
 ARGS:
-    Operation    Operation to perform
+    operation    Operation to perform
 `)
+}
+
+func (c *ClientCmd) loadFromConfigFile(configFile string) error {
+	data, err := os.ReadFile(configFile)
+	if err != nil {
+		return fmt.Errorf("读取配置文件失败: %w", err)
+	}
+
+	// 根据文件扩展名选择解析方式
+	ext := filepath.Ext(configFile)
+	switch strings.ToLower(ext) {
+	case ".json":
+		return json.Unmarshal(data, c)
+	case ".yaml", ".yml":
+		return yaml.Unmarshal(data, c)
+	case ".toml":
+		_, err := toml.Decode(string(data), c)
+		return err
+	default:
+		return fmt.Errorf("不支持的配置文件格式: %s", ext)
+	}
 }

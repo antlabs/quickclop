@@ -5,10 +5,14 @@ package basic
 import (
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
-	"time"
+	"encoding/json"
+	"gopkg.in/yaml.v3"
+	"github.com/BurntSushi/toml"
+	"path/filepath"
 )
+
+
 
 
 // pcurl的Parse方法，用于解析命令行参数
@@ -17,9 +21,45 @@ func (c *pcurl) Parse(args []string) error {
 		args = os.Args[1:]
 	}
 
+	// 设置默认值
+	
+
+	// 从环境变量中读取值
+	
+
+	
+
+	// 检查是否指定了配置文件
+	var configFile string
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--config" || args[i] == "-c" {
+			if i+1 < len(args) {
+				configFile = args[i+1]
+				// 移除 --config 和它的值，避免后续解析错误
+				if i+2 < len(args) {
+					args = append(args[:i], args[i+2:]...)
+				} else {
+					args = args[:i]
+				}
+				i--
+				break
+			}
+		}
+	}
+
+	// 从配置文件加载选项
+	if configFile != "" {
+		if err := c.loadFromConfigFile(configFile); err != nil {
+			return fmt.Errorf("加载配置文件失败: %w", err)
+		}
+	}
+
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch {
+		case arg == "--help" || arg == "-h":
+			c.Usage()
+			os.Exit(0)
 		
 		case arg == "-X" || arg == "--request":
 			
@@ -31,10 +71,12 @@ func (c *pcurl) Parse(args []string) error {
 			
 			i++
 			
+		
 		case arg == "-G" || arg == "--get":
 			
 			c.Get = true
 			
+		
 		case arg == "-H" || arg == "--header":
 			
 			if i+1 >= len(args) {
@@ -45,6 +87,7 @@ func (c *pcurl) Parse(args []string) error {
 			
 			i++
 			
+		
 		case arg == "-d" || arg == "--data":
 			
 			if i+1 >= len(args) {
@@ -55,6 +98,7 @@ func (c *pcurl) Parse(args []string) error {
 			
 			i++
 			
+		
 		case arg == "--data-raw":
 			
 			if i+1 >= len(args) {
@@ -65,6 +109,7 @@ func (c *pcurl) Parse(args []string) error {
 			
 			i++
 			
+		
 		case arg == "-F" || arg == "--form":
 			
 			if i+1 >= len(args) {
@@ -75,6 +120,7 @@ func (c *pcurl) Parse(args []string) error {
 			
 			i++
 			
+		
 		case arg == "--url":
 			
 			if i+1 >= len(args) {
@@ -85,10 +131,12 @@ func (c *pcurl) Parse(args []string) error {
 			
 			i++
 			
+		
 		case arg == "-L" || arg == "--location":
 			
 			c.Location = true
 			
+		
 		case arg == "--data-urlencode":
 			
 			if i+1 >= len(args) {
@@ -99,22 +147,43 @@ func (c *pcurl) Parse(args []string) error {
 			
 			i++
 			
+		
 		case arg == "--compressed":
 			
 			c.Compressed = true
 			
+		
 		case arg == "-i" || arg == "--include":
 			
 			c.Include = true
 			
+		
 		case arg == "-k" || arg == "--insecure":
 			
 			c.Insecure = true
 			
+		
+		
 		case !strings.HasPrefix(arg, "-"):
+			
+			
+			
+			
+			
+			
+			
 			
 			c.URL2 = arg
 			
+			
+			
+			
+			
+			
+			
+			
+			
+		
 		default:
 			return fmt.Errorf("unknown option: %s", arg)
 		}
@@ -128,6 +197,8 @@ func (c *pcurl) Usage() {
   myapp [OPTIONS] [ARGS]
 
 OPTIONS:
+    -c, --config    指定配置文件路径 (支持 JSON, YAML, TOML)
+    -h, --help      显示帮助信息
     -X, --request    Specify request command to use
     -G, --get    Put the post data in the URL and use GET
     -H, --header    Pass custom header(s) to server
@@ -142,6 +213,27 @@ OPTIONS:
     -k, --insecure    Allow insecure server connections when using SSL
 
 ARGS:
-    URL2    url2
+    url2    url2
 `)
+}
+
+func (c *pcurl) loadFromConfigFile(configFile string) error {
+	data, err := os.ReadFile(configFile)
+	if err != nil {
+		return fmt.Errorf("读取配置文件失败: %w", err)
+	}
+
+	// 根据文件扩展名选择解析方式
+	ext := filepath.Ext(configFile)
+	switch strings.ToLower(ext) {
+	case ".json":
+		return json.Unmarshal(data, c)
+	case ".yaml", ".yml":
+		return yaml.Unmarshal(data, c)
+	case ".toml":
+		_, err := toml.Decode(string(data), c)
+		return err
+	default:
+		return fmt.Errorf("不支持的配置文件格式: %s", ext)
+	}
 }
