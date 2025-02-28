@@ -254,6 +254,7 @@ type FieldInfo struct {
 	ParseFunc  string // 解析函数名
 	structType *ast.StructType
 	CmdName    string
+	ArgName    string // 新增字段，用于存储参数名称
 }
 
 // 解析字段
@@ -338,7 +339,7 @@ func parseField(f *ast.Field, file *ast.File, fset *token.FileSet) FieldInfo {
 					if strings.Contains(clopTag, "=") {
 						argsParts := strings.Split(clopTag, "=")
 						if len(argsParts) > 1 {
-							info.Name = argsParts[1]
+							info.ArgName = argsParts[1]
 						}
 					}
 				}

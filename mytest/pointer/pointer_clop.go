@@ -68,7 +68,7 @@ func (c *testPointers) Parse(args []string) error {
 		case !strings.HasPrefix(arg, "-"):
 			
 			val := arg
-			c.stringarg = &val
+			c.StringArg = &val
 			
 		default:
 			return fmt.Errorf("unknown option: %s", arg)
@@ -89,6 +89,6 @@ OPTIONS:
     -b, --bool    A boolean pointer
 
 ARGS:
-    stringarg    A string argument as pointer
+    StringArg    A string argument as pointer
 `)
 }

@@ -252,7 +252,7 @@ func (c *ClientCmd) Parse(args []string) error {
 			
 		case !strings.HasPrefix(arg, "-"):
 			
-			c.operation = arg
+			c.Operation = arg
 			
 		default:
 			return fmt.Errorf("unknown option: %s", arg)
@@ -272,6 +272,6 @@ OPTIONS:
     -r, --retries    Number of retries
 
 ARGS:
-    operation    Operation to perform
+    Operation    Operation to perform
 `)
 }

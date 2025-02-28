@@ -113,7 +113,7 @@ func (c *pcurl) Parse(args []string) error {
 			
 		case !strings.HasPrefix(arg, "-"):
 			
-			c.url2 = arg
+			c.URL2 = arg
 			
 		default:
 			return fmt.Errorf("unknown option: %s", arg)
@@ -142,6 +142,6 @@ OPTIONS:
     -k, --insecure    Allow insecure server connections when using SSL
 
 ARGS:
-    url2    url2
+    URL2    url2
 `)
 }
