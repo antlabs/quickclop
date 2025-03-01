@@ -192,4 +192,4 @@ cp your_app_completion.fish ~/.config/fish/completions/
 
 ## 许可证
 
-MIT
+apache 2.0

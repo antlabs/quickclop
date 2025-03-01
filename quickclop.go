@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"text/template"
 )
@@ -550,7 +551,7 @@ func parseField(field *ast.Field, file *ast.File, fset *token.FileSet) FieldInfo
 	}
 
 	// 检查是否是嵌套结构体
-	if info.Type != "" && !isBasicType(info.Type) && !isTimeType(info.Type) {
+	if info.Type != "" && !isBasicType(info.Type) && !isTimeType(info.Type) && !isURLType(info.Type) {
 		// 查找结构体定义
 		structDef := findStructDef(info.Type, file, fset.Position(field.Pos()).Filename, "")
 		if structDef != nil {
@@ -618,6 +619,60 @@ func isTimeType(typeName string) bool {
 	return timeTypes[typeName]
 }
 
+// 检查是否是 URL 类型
+func isURLType(typeName string) bool {
+	urlTypes := map[string]bool{
+		"url.URL":  true,
+		"*url.URL": true,
+	}
+
+	return urlTypes[typeName]
+}
+
+// 解析结构体上的版本信息标签
+func parseVersionTag(file *ast.File) (string, string, string) {
+	var version, description, buildInfo string
+
+	// 遍历文件中的注释
+	for _, comment := range file.Comments {
+		for _, line := range comment.List {
+			if strings.Contains(line.Text, ":quickclop") && strings.Contains(line.Text, "version:") {
+				// 解析版本标签
+				versionMatch := regexp.MustCompile(`version:"([^"]*)"`)
+				if matches := versionMatch.FindStringSubmatch(line.Text); len(matches) > 1 {
+					version = matches[1]
+				}
+
+				// 解析描述标签
+				descMatch := regexp.MustCompile(`description:"([^"]*)"`)
+				if matches := descMatch.FindStringSubmatch(line.Text); len(matches) > 1 {
+					description = matches[1]
+				}
+
+				// 解析构建信息标签
+				buildMatch := regexp.MustCompile(`build:"([^"]*)"`)
+				if matches := buildMatch.FindStringSubmatch(line.Text); len(matches) > 1 {
+					buildInfo = matches[1]
+				}
+			}
+		}
+	}
+
+	return version, description, buildInfo
+}
+
+// 检查是否有版本标志
+func hasVersionFlag(fields []FieldInfo) bool {
+	for _, field := range fields {
+		if (field.Type == "bool" || field.Type == "*bool") &&
+			(field.Name == "Version" || field.Name == "version") &&
+			(field.Short == "v" || field.Long == "version") {
+			return true
+		}
+	}
+	return false
+}
+
 // 生成代码
 func generateCode(structName string, structType *ast.StructType, outputFile string, packageName string, file *ast.File, fset *token.FileSet) error {
 	// 解析结构体字段
@@ -660,6 +715,10 @@ func generateCode(structName string, structType *ast.StructType, outputFile stri
 		}
 	}
 
+	// 解析版本信息
+	version, description, buildInfo := parseVersionTag(file)
+	hasVersionFlagValue := hasVersionFlag(fields)
+
 	// 准备模板数据
 	data := struct {
 		StructName     string
@@ -671,12 +730,26 @@ func generateCode(structName string, structType *ast.StructType, outputFile stri
 			Usage  string
 			Fields []FieldInfo
 		}
+		// 版本信息相关字段
+		HasVersionFlag bool
+		Version        string
+		Description    string
+		BuildInfo      string
+		AppName        string
+		PackageName    string
 	}{
 		StructName:     structName,
 		Fields:         fields,
 		HasArgsField:   hasArgs(fields),
 		HasSubcommands: len(subcommands) > 0,
 		Subcommands:    subcommands,
+		// 版本信息相关字段赋值
+		HasVersionFlag: hasVersionFlagValue,
+		Version:        version,
+		Description:    description,
+		BuildInfo:      buildInfo,
+		AppName:        structName,
+		PackageName:    packageName,
 	}
 
 	// 打开输出文件进行追加
@@ -689,16 +762,6 @@ func generateCode(structName string, structType *ast.StructType, outputFile stri
 	// 执行模板
 	if err := tmpl.Execute(f, data); err != nil {
 		return fmt.Errorf("生成代码失败: %w", err)
-	}
-
-	// 获取输出文件所在目录
-	outputDir := filepath.Dir(outputFile)
-
-	// 生成各种 shell 的补全脚本
-	for _, shellType := range []string{"bash", "zsh", "fish"} {
-		if err := generateCompletionScript(structName, structType, outputDir, packageName, file, fset, shellType); err != nil {
-			log.Printf("生成 %s 补全脚本失败: %v", shellType, err)
-		}
 	}
 
 	return nil
@@ -818,8 +881,7 @@ func createOutputFile(outputFile string, packageName string) error {
 	// 检查文件是否存在
 	_, err := os.Stat(outputFile)
 	if err == nil {
-		// 文件存在，清空内容
-		err = os.Truncate(outputFile, 0)
+		err := os.Remove(outputFile)
 		if err != nil {
 			return fmt.Errorf("清空文件失败: %w", err)
 		}
@@ -881,18 +943,14 @@ func Generate(options *Options) error {
 			outputDir = filepath.Dir(options.OutputFile)
 		}
 
-		if options.ShellType == "" {
-			// 生成所有类型的补全脚本
-			for _, shell := range []string{"bash", "zsh", "fish"} {
-				if err := generateCompletionScript(options.StructName, structType, outputDir, packageName, node, fset, shell); err != nil {
-					log.Printf("生成 %s 补全脚本失败: %v", shell, err)
-				}
-			}
-		} else {
+		if options.ShellType != "" {
 			// 生成指定类型的补全脚本
 			if err := generateCompletionScript(options.StructName, structType, outputDir, packageName, node, fset, options.ShellType); err != nil {
 				return fmt.Errorf("生成补全脚本失败: %w", err)
 			}
+		} else {
+			// 当没有指定 ShellType 时，提示用户需要指定 shell 类型
+			return fmt.Errorf("请使用 --shell 参数指定要生成的补全脚本类型 (bash, zsh, fish)")
 		}
 		return nil
 	}
