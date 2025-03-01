@@ -24,6 +24,13 @@ go.work.sum
 # env file
 .env
 
+# Prevent executable files
+**/examples/types/types
+# Prevent any executable files without extensions
+*
+!*.*
+!*/
+
 /quickclop
 /ast_debug
 /bin
