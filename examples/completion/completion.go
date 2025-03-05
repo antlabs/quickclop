@@ -6,20 +6,21 @@ import (
 )
 
 // Options 定义命令行选项
+// :quickclop
 type Options struct {
 	// 基本选项
-	Help    bool   `clop:"-h, --help" usage:"显示帮助信息"`
-	Version bool   `clop:"-v, --version" usage:"显示版本信息"`
-	Debug   bool   `clop:"-d, --debug" usage:"启用调试模式"`
-	
+	Help    bool `clop:"-h, --help" usage:"显示帮助信息"`
+	Version bool `clop:"-v, --version" usage:"显示版本信息"`
+	Debug   bool `clop:"-d, --debug" usage:"启用调试模式"`
+
 	// 文件相关选项，使用 completion 标签指定补全类型
 	Input  string `clop:"-i, --input" usage:"输入文件路径" completion:"file"`
 	Output string `clop:"-o, --output" usage:"输出文件路径" completion:"file"`
 	Dir    string `clop:"--dir" usage:"工作目录" completion:"dir"`
-	
+
 	// 自定义补全选项
 	Format string `clop:"-f, --format" usage:"输出格式" completion:"custom" completion_values:"json yaml toml xml"`
-	
+
 	// 子命令
 	Add    AddCmd    `clop:"subcmd" usage:"添加记录"`
 	Remove RemoveCmd `clop:"subcmd" usage:"删除记录"`

@@ -19,9 +19,10 @@ QuickClop 是一个 Go 语言命令行参数解析代码生成工具，可以根
 3. **类型支持**
    - 基本类型：`string`, `int`, `float64`, `bool`
    - 指针类型：`*string`, `*int`, `*float64`, `*bool`
-   - 切片类型：`[]string`
+   - 切片类型：`[]string`, `[]int`, `[]int8`, `[]int16`, `[]int32`, `[]int64`, `[]uint`, `[]uint8`, `[]uint16`, `[]uint32`, `[]uint64`, `[]float32`, `[]float64`, `[]bool`, `[]byte`, `[]rune`
    - 时间类型：`time.Duration`, `*time.Duration`, `time.Time`, `*time.Time`
    - URL 类型：`url.URL`, `*url.URL`
+   - IP 地址类型：`net.IP`, `*net.IP`, `net.IPNet`, `*net.IPNet`
 
 4. **参数解析**
    - 支持短选项和长选项：`-s`, `--long`

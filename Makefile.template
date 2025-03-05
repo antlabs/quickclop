@@ -1,0 +1,29 @@
+.PHONY: all build test clean test-examples
+
+# 默认目标
+all: build test
+
+# 构建目标
+build:
+	@echo "Building quickclop..."
+	@go build -o bin/quickclop ./cmd/quickclop
+
+# 测试目标
+test:
+	@echo "Running tests..."
+	@go test -v ./...
+
+# 清理目标
+clean:
+	@echo "Cleaning..."
+	@rm -rf bin/
+	@go clean
+
+# 测试所有示例
+test-examples:
+	@./test_examples.sh
+
+# 安装
+install:
+	@echo "Installing quickclop..."
+	@go install ./cmd/quickclop

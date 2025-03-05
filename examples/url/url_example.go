@@ -5,6 +5,7 @@ import (
 	"net/url"
 )
 
+// :quickclop
 type Options struct {
 	Name    string   `clop:"-n,--name" usage:"名称"`
 	Age     int      `clop:"-a,--age" usage:"年龄"`
