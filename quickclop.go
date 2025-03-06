@@ -626,7 +626,7 @@ func generateCode(structName string, structType *ast.StructType, outputFile stri
 	needFmt := false
 	needOs := false
 	needStrconv := false
-	needStrings := false
+	needStrings := true
 	needTime := false
 	needJson := false
 	needYaml := false
@@ -651,25 +651,27 @@ func generateCode(structName string, structType *ast.StructType, outputFile stri
 			needUrl = true
 		}
 
+		// 数值类型需要 strconv 包（用于命令行参数解析）
+		if strings.Contains(field.Type, "int") || 
+		   strings.Contains(field.Type, "float") || 
+		   strings.Contains(field.Type, "uint") {
+			needStrconv = true
+		}
+
 		// 布尔类型通常不需要strconv，除非有默认值或环境变量
 		if strings.Contains(field.Type, "bool") && (field.Default != "" || field.EnvVar != "") {
 			needStrconv = true
 		}
 
-		// 字符串和切片类型需要strings
+		// 字符串和切片类型可能需要额外的 strings 包功能
 		if strings.Contains(field.Type, "string") ||
 			strings.Contains(field.Type, "[]") {
-			needStrings = true
+			// needStrings 已经在全局设置为 true
 		}
 
 		// 检查是否有环境变量或默认值，这些也需要相应的包
 		if field.EnvVar != "" {
 			needOs = true
-
-			// 根据字段类型可能需要转换
-			if !strings.Contains(field.Type, "string") {
-				needStrconv = true
-			}
 
 			if strings.Contains(field.Type, "time.") {
 				needTime = true
@@ -685,11 +687,6 @@ func generateCode(structName string, structType *ast.StructType, outputFile stri
 		}
 
 		if field.Default != "" {
-			// 根据字段类型可能需要转换
-			if !strings.Contains(field.Type, "string") {
-				needStrconv = true
-			}
-
 			if strings.Contains(field.Type, "time.") {
 				needTime = true
 			}
@@ -715,22 +712,18 @@ func generateCode(structName string, structType *ast.StructType, outputFile stri
 	needFmt = true      // 用于错误信息和Usage输出
 	needOs = true       // 用于os.Args和os.Exit
 	needFilepath = true // 用于filepath.Ext
+	needStrings = true  // 用于 strings.ToLower 和其他字符串操作
 
 	// 检查是否需要生成配置文件加载功能
-	needConfigFile := true //TOOD
 	for _, field := range fields {
 		if field.Short == "c" || field.Long == "config" {
-			if needConfigFile {
-				needStrings = true // 配置文件加载需要 strings 包
-			}
-			needConfigFile = true
-			needStrings = true  // 配置文件加载需要 strings 包
-			needFilepath = true // 配置文件加载需要 filepath 包
-			needFmt = true      // 配置文件加载需要 fmt 包
-			needOs = true       // 配置文件加载需要 os 包
-			needJson = true     // 配置文件加载可能需要 json 包
-			needYaml = true     // 配置文件加载可能需要 yaml 包
-			needToml = true     // 配置文件加载可能需要 toml 包
+			// 配置文件加载需要的包
+			needFilepath = true // 用于 filepath.Ext
+			needFmt = true      // 用于 fmt.Errorf
+			needOs = true       // 用于 os.ReadFile
+			needJson = true     // 用于 json.Unmarshal
+			needYaml = true     // 用于 yaml.Unmarshal
+			needToml = true     // 用于 toml.Decode
 			break
 		}
 	}

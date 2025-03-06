@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"os"
 )
 
 // :quickclop
@@ -25,7 +26,7 @@ func main() {
 	var test TestImport
 
 	// 这里会调用生成的代码来解析命令行参数
-	// 实际运行时需要取消注释
+	test.Parse(os.Args[1:])
 	// quickclop.MustRun(&test)
 
 	fmt.Printf("IP: %v\n", test.IP)
