@@ -1,0 +1,274 @@
+{{ define "default_value" }}
+{{- $hasDefault := false -}}
+{{- range .Fields -}}
+	{{- if not .IsNested -}}
+		{{- if .Default -}}
+			{{- $hasDefault = true -}}
+		{{- end -}}
+	{{- end -}}
+{{- end -}}
+{{- if $hasDefault }}
+
+	// 设置默认值
+	{{- range .Fields -}}{{- if not .IsNested -}}{{- if .Default }}
+
+	{{- if eq .Type "string" }}
+	c.{{ .Name }} = "{{ .Default }}"
+	{{- else if eq .Type "*string" }}
+	defaultStr := "{{ .Default }}"
+	c.{{ .Name }} = &defaultStr
+	{{- else if eq .Type "int" }}
+	if val, err := strconv.Atoi("{{ .Default }}"); err == nil {
+		c.{{ .Name }} = val
+	}
+	{{- else if eq .Type "*int" }}
+	if val, err := strconv.Atoi("{{ .Default }}"); err == nil {
+		c.{{ .Name }} = &val
+	}
+	{{- else if eq .Type "float64" }}
+	if val, err := strconv.ParseFloat("{{ .Default }}", 64); err == nil {
+		c.{{ .Name }} = val
+	}
+	{{- else if eq .Type "*float64" }}
+	if val, err := strconv.ParseFloat("{{ .Default }}", 64); err == nil {
+		c.{{ .Name }} = &val
+	}
+	{{- else if eq .Type "bool" }}
+	if val, err := strconv.ParseBool("{{ .Default }}"); err == nil {
+		c.{{ .Name }} = val
+	}
+	{{- else if eq .Type "*bool" }}
+	if val, err := strconv.ParseBool("{{ .Default }}"); err == nil {
+		c.{{ .Name }} = &val
+	}
+	{{ else if eq .Type "[]string" }}
+	c.{{ .Name }} = strings.Split("{{ .Default }}", ",")
+	{{ else if eq .Type "*[]string" }}
+	slice := strings.Split("{{ .Default }}", ",")
+	c.{{ .Name }} = &slice
+	{{ else if eq .Type "[]int" }}
+	for _, s := range strings.Split("{{ .Default }}", ",") {
+		if val, err := strconv.Atoi(s); err == nil {
+			c.{{ .Name }} = append(c.{{ .Name }}, val)
+		}
+	}
+	{{ else if eq .Type "*[]int" }}
+	var slice []int
+	for _, s := range strings.Split("{{ .Default }}", ",") {
+		if val, err := strconv.Atoi(s); err == nil {
+			slice = append(slice, val)
+		}
+	}
+	c.{{ .Name }} = &slice
+	{{ else if eq .Type "[]int8" }}
+	for _, s := range strings.Split("{{ .Default }}", ",") {
+		if val, err := strconv.ParseInt(s, 10, 8); err == nil {
+			c.{{ .Name }} = append(c.{{ .Name }}, int8(val))
+		}
+	}
+	{{ else if eq .Type "*[]int8" }}
+	var slice []int8
+	for _, s := range strings.Split("{{ .Default }}", ",") {
+		if val, err := strconv.ParseInt(s, 10, 8); err == nil {
+			slice = append(slice, int8(val))
+		}
+	}
+	c.{{ .Name }} = &slice
+	{{ else if eq .Type "[]int16" }}
+	for _, s := range strings.Split("{{ .Default }}", ",") {
+		if val, err := strconv.ParseInt(s, 10, 16); err == nil {
+			c.{{ .Name }} = append(c.{{ .Name }}, int16(val))
+		}
+	}
+	{{ else if eq .Type "*[]int16" }}
+	var slice []int16
+	for _, s := range strings.Split("{{ .Default }}", ",") {
+		if val, err := strconv.ParseInt(s, 10, 16); err == nil {
+			slice = append(slice, int16(val))
+		}
+	}
+	c.{{ .Name }} = &slice
+	{{ else if eq .Type "[]int32" }}
+	for _, s := range strings.Split("{{ .Default }}", ",") {
+		if val, err := strconv.ParseInt(s, 10, 32); err == nil {
+			c.{{ .Name }} = append(c.{{ .Name }}, int32(val))
+		}
+	}
+	{{ else if eq .Type "*[]int32" }}
+	var slice []int32
+	for _, s := range strings.Split("{{ .Default }}", ",") {
+		if val, err := strconv.ParseInt(s, 10, 32); err == nil {
+			slice = append(slice, int32(val))
+		}
+	}
+	c.{{ .Name }} = &slice
+	{{ else if eq .Type "[]int64" }}
+	for _, s := range strings.Split("{{ .Default }}", ",") {
+		if val, err := strconv.ParseInt(s, 10, 64); err == nil {
+			c.{{ .Name }} = append(c.{{ .Name }}, val)
+		}
+	}
+	{{ else if eq .Type "*[]int64" }}
+	var slice []int64
+	for _, s := range strings.Split("{{ .Default }}", ",") {
+		if val, err := strconv.ParseInt(s, 10, 64); err == nil {
+			slice = append(slice, val)
+		}
+	}
+	c.{{ .Name }} = &slice
+	{{ else if eq .Type "[]uint" }}
+	for _, s := range strings.Split("{{ .Default }}", ",") {
+		if val, err := strconv.ParseUint(s, 10, 0); err == nil {
+			c.{{ .Name }} = append(c.{{ .Name }}, uint(val))
+		}
+	}
+	{{ else if eq .Type "*[]uint" }}
+	var slice []uint
+	for _, s := range strings.Split("{{ .Default }}", ",") {
+		if val, err := strconv.ParseUint(s, 10, 0); err == nil {
+			slice = append(slice, uint(val))
+		}
+	}
+	c.{{ .Name }} = &slice
+	{{ else if eq .Type "[]uint8" }}
+	for _, s := range strings.Split("{{ .Default }}", ",") {
+		if val, err := strconv.ParseUint(s, 10, 8); err == nil {
+			c.{{ .Name }} = append(c.{{ .Name }}, uint8(val))
+		}
+	}
+	{{ else if eq .Type "*[]uint8" }}
+	var slice []uint8
+	for _, s := range strings.Split("{{ .Default }}", ",") {
+		if val, err := strconv.ParseUint(s, 10, 8); err == nil {
+			slice = append(slice, uint8(val))
+		}
+	}
+	c.{{ .Name }} = &slice
+	{{ else if eq .Type "[]uint16" }}
+	for _, s := range strings.Split("{{ .Default }}", ",") {
+		if val, err := strconv.ParseUint(s, 10, 16); err == nil {
+			c.{{ .Name }} = append(c.{{ .Name }}, uint16(val))
+		}
+	}
+	{{ else if eq .Type "*[]uint16" }}
+	var slice []uint16
+	for _, s := range strings.Split("{{ .Default }}", ",") {
+		if val, err := strconv.ParseUint(s, 10, 16); err == nil {
+			slice = append(slice, uint16(val))
+		}
+	}
+	c.{{ .Name }} = &slice
+	{{ else if eq .Type "[]uint32" }}
+	for _, s := range strings.Split("{{ .Default }}", ",") {
+		if val, err := strconv.ParseUint(s, 10, 32); err == nil {
+			c.{{ .Name }} = append(c.{{ .Name }}, uint32(val))
+		}
+	}
+	{{ else if eq .Type "*[]uint32" }}
+	var slice []uint32
+	for _, s := range strings.Split("{{ .Default }}", ",") {
+		if val, err := strconv.ParseUint(s, 10, 32); err == nil {
+			slice = append(slice, uint32(val))
+		}
+	}
+	c.{{ .Name }} = &slice
+	{{ else if eq .Type "[]uint64" }}
+	for _, s := range strings.Split("{{ .Default }}", ",") {
+		if val, err := strconv.ParseUint(s, 10, 64); err == nil {
+			c.{{ .Name }} = append(c.{{ .Name }}, val)
+		}
+	}
+	{{ else if eq .Type "*[]uint64" }}
+	var slice []uint64
+	for _, s := range strings.Split("{{ .Default }}", ",") {
+		if val, err := strconv.ParseUint(s, 10, 64); err == nil {
+			slice = append(slice, val)
+		}
+	}
+	c.{{ .Name }} = &slice
+	{{ else if eq .Type "[]float32" }}
+	for _, s := range strings.Split("{{ .Default }}", ",") {
+		if val, err := strconv.ParseFloat(s, 32); err == nil {
+			c.{{ .Name }} = append(c.{{ .Name }}, float32(val))
+		}
+	}
+	{{ else if eq .Type "*[]float32" }}
+	var slice []float32
+	for _, s := range strings.Split("{{ .Default }}", ",") {
+		if val, err := strconv.ParseFloat(s, 32); err == nil {
+			slice = append(slice, float32(val))
+		}
+	}
+	c.{{ .Name }} = &slice
+	{{ else if eq .Type "[]float64" }}
+	for _, s := range strings.Split("{{ .Default }}", ",") {
+		if val, err := strconv.ParseFloat(s, 64); err == nil {
+			c.{{ .Name }} = append(c.{{ .Name }}, val)
+		}
+	}
+	{{ else if eq .Type "*[]float64" }}
+	var slice []float64
+	for _, s := range strings.Split("{{ .Default }}", ",") {
+		if val, err := strconv.ParseFloat(s, 64); err == nil {
+			slice = append(slice, val)
+		}
+	}
+	c.{{ .Name }} = &slice
+	{{ else if eq .Type "[]bool" }}
+	for _, s := range strings.Split("{{ .Default }}", ",") {
+		if val, err := strconv.ParseBool(s); err == nil {
+			c.{{ .Name }} = append(c.{{ .Name }}, val)
+		}
+	}
+	{{ else if eq .Type "*[]bool" }}
+	var slice []bool
+	for _, s := range strings.Split("{{ .Default }}", ",") {
+		if val, err := strconv.ParseBool(s); err == nil {
+			slice = append(slice, val)
+		}
+	}
+	c.{{ .Name }} = &slice
+	{{ else if eq .Type "time.Duration" }}
+	if duration, err := time.ParseDuration("{{ .Default }}"); err == nil {
+		c.{{ .Name }} = duration
+	}
+	{{ else if eq .Type "*time.Duration" }}
+	if duration, err := time.ParseDuration("{{ .Default }}"); err == nil {
+		c.{{ .Name }} = &duration
+	}
+	{{ else if eq .Type "time.Time" }}
+	if t, err := time.Parse(time.RFC3339, "{{ .Default }}"); err == nil {
+		c.{{ .Name }} = t
+	}
+	{{ else if eq .Type "*time.Time" }}
+	if t, err := time.Parse(time.RFC3339, "{{ .Default }}"); err == nil {
+		c.{{ .Name }} = &t
+	}
+	{{ else if eq .Type "url.URL" }}
+	if u, err := url.Parse("{{ .Default }}"); err == nil {
+		c.{{ .Name }} = *u
+	}
+	{{ else if eq .Type "*url.URL" }}
+	if u, err := url.Parse("{{ .Default }}"); err == nil {
+		c.{{ .Name }} = u
+	}
+	{{ else if eq .Type "net.IP" }}
+	if ip := net.ParseIP("{{ .Default }}"); ip != nil {
+		c.{{ .Name }} = ip
+	}
+	{{ else if eq .Type "*net.IP" }}
+	if ip := net.ParseIP("{{ .Default }}"); ip != nil {
+		c.{{ .Name }} = &ip
+	}
+	{{ else if eq .Type "net.IPNet" }}
+	if _, ipNet, err := net.ParseCIDR("{{ .Default }}"); err == nil {
+		c.{{ .Name }} = *ipNet
+	}
+	{{ else if eq .Type "*net.IPNet" }}
+	if _, ipNet, err := net.ParseCIDR("{{ .Default }}"); err == nil {
+		c.{{ .Name }} = ipNet
+	}
+	{{ end }}
+	{{- end }}{{- end }}{{- end }}
+	{{- end }}
+{{ end }}

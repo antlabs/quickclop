@@ -1,0 +1,28 @@
+{{ define "has_version" }}
+	{{- if .HasVersionFlag }}
+	// 检查是否显示版本信息
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		{{- range .Fields -}}
+		{{- if and (or (eq .Type "bool") (eq .Type "*bool")) (or (eq .Name "Version") (eq .Name "version")) -}}
+		{{- if .Short }}
+		if arg == "-{{ .Short }}" || 
+		{{- end -}}
+		{{- if .Long }}
+		   arg == "--{{ .Long }}" 
+		{{- end -}}
+		{
+			fmt.Printf("{{ $.AppName }}{{if $.Version}} version {{ $.Version }}{{end}}\n")
+			{{- if $.Description }}
+			fmt.Printf("{{ $.Description }}\n")
+			{{- end }}
+			{{- if $.BuildInfo }}
+			fmt.Printf("Build: {{ $.BuildInfo }}\n")
+			{{- end }}
+			return nil
+		}
+		{{- end -}}
+		{{- end }}
+	}
+    {{- end }}
+{{end}}

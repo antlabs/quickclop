@@ -43,13 +43,28 @@ done
 # 获取示例目录
 EXAMPLES_DIR="./examples"
 if [ -n "$EXAMPLE_NAME" ]; then
-    if [ ! -d "$EXAMPLES_DIR/$EXAMPLE_NAME" ]; then
+    # 检查是否是基本类型示例 (在 base 目录下)
+    if [ -d "$EXAMPLES_DIR/base/$EXAMPLE_NAME" ]; then
+        EXAMPLES="$EXAMPLES_DIR/base/$EXAMPLE_NAME"
+    # 检查是否是环境变量类型示例 (在 env_var_types 目录下)
+    elif [ -d "$EXAMPLES_DIR/env_var_types/$EXAMPLE_NAME" ]; then
+        EXAMPLES="$EXAMPLES_DIR/env_var_types/$EXAMPLE_NAME"
+    # 检查是否是默认值类型示例 (在 default_value_types 目录下)
+    elif [ -d "$EXAMPLES_DIR/default_value_types/$EXAMPLE_NAME" ]; then
+        EXAMPLES="$EXAMPLES_DIR/default_value_types/$EXAMPLE_NAME"
+    elif [ -d "$EXAMPLES_DIR/$EXAMPLE_NAME" ]; then
+        EXAMPLES="$EXAMPLES_DIR/$EXAMPLE_NAME"
+    else
         echo -e "${RED}错误: 示例 '$EXAMPLE_NAME' 不存在${NC}"
         exit 1
     fi
-    EXAMPLES="$EXAMPLES_DIR/$EXAMPLE_NAME"
 else
-    EXAMPLES=$(find "$EXAMPLES_DIR" -type d -depth 1)
+    # 获取所有示例，包括 base 目录、env_var_types 目录和 default_value_types 目录下的示例
+    EXAMPLES=$(find "$EXAMPLES_DIR" -type d -depth 1 | grep -v "/base$" | grep -v "/env_var_types$" | grep -v "/default_value_types$")
+    BASE_EXAMPLES=$(find "$EXAMPLES_DIR/base" -type d -depth 1)
+    ENV_VAR_EXAMPLES=$(find "$EXAMPLES_DIR/env_var_types" -type d -depth 1)
+    DEFAULT_VALUE_EXAMPLES=$(find "$EXAMPLES_DIR/default_value_types" -type d -depth 1)
+    EXAMPLES="$EXAMPLES $BASE_EXAMPLES $ENV_VAR_EXAMPLES $DEFAULT_VALUE_EXAMPLES"
 fi
 
 # 清理所有示例目录中的可执行文件
@@ -89,10 +104,24 @@ declare -a EXAMPLE_STATUSES=()
 declare -a EXAMPLE_ERRORS=()
 
 for example in $EXAMPLES; do
+    # 获取示例目录名
     EXAMPLE_NAME=$(basename "$example")
+    # 获取父目录名
+    PARENT_DIR=$(dirname "$example")
+    PARENT_NAME=$(basename "$PARENT_DIR")
+    
     TOTAL_COUNT=$((TOTAL_COUNT+1))
     
-    echo -e "${YELLOW}测试示例: ${EXAMPLE_NAME}${NC}"
+    # 如果是 base、env_var_types 或 default_value_types 目录下的示例，显示完整路径
+    if [ "$PARENT_NAME" = "base" ]; then
+        echo -e "${YELLOW}测试示例: base/${EXAMPLE_NAME}${NC}"
+    elif [ "$PARENT_NAME" = "env_var_types" ]; then
+        echo -e "${YELLOW}测试示例: env_var_types/${EXAMPLE_NAME}${NC}"
+    elif [ "$PARENT_NAME" = "default_value_types" ]; then
+        echo -e "${YELLOW}测试示例: default_value_types/${EXAMPLE_NAME}${NC}"
+    else
+        echo -e "${YELLOW}测试示例: ${EXAMPLE_NAME}${NC}"
+    fi
     
     # 切换到示例目录
     cd "$example" || continue
@@ -103,7 +132,12 @@ for example in $EXAMPLES; do
     
     # 执行代码生成
     echo "执行代码生成..."
-    GEN_CMD="../../quickclop"
+    # 根据目录深度调整路径
+    if [ "$PARENT_NAME" = "base" ] || [ "$PARENT_NAME" = "env_var_types" ] || [ "$PARENT_NAME" = "default_value_types" ]; then
+        GEN_CMD="../../../quickclop"
+    else
+        GEN_CMD="../../quickclop"
+    fi
 
     echo "执行命令: ${GEN_CMD}"
     
@@ -133,7 +167,12 @@ for example in $EXAMPLES; do
                     OUTPUT_FILE="main_clop.go"
                 fi
                 
-                GEN_CMD="../../cmd/quickclop/quickclop -i \"$INPUT_FILE\" -o \"$OUTPUT_FILE\" -s \"$STRUCT_NAME\""
+                # 根据目录深度调整路径
+                if [ "$PARENT_NAME" = "base" ] || [ "$PARENT_NAME" = "env_var_types" ] || [ "$PARENT_NAME" = "default_value_types" ]; then
+                    GEN_CMD="../../../cmd/quickclop/quickclop -i \"$INPUT_FILE\" -o \"$OUTPUT_FILE\" -s \"$STRUCT_NAME\"" 
+                else
+                    GEN_CMD="../../cmd/quickclop/quickclop -i \"$INPUT_FILE\" -o \"$OUTPUT_FILE\" -s \"$STRUCT_NAME\"" 
+                fi
                 echo "执行命令: ${GEN_CMD}"
                 eval $GEN_CMD
                 GEN_STATUS=$?
@@ -141,7 +180,14 @@ for example in $EXAMPLES; do
                     echo -e "${RED}✘ 使用结构体名称重新生成仍然失败${NC}"
                     echo -e "${RED}失败命令: ${GEN_CMD}${NC}"
                     FAILURE_COUNT=$((FAILURE_COUNT+1))
+                    # 如果是 base 或 env_var_types 目录下的示例，显示完整路径
+                if [ "$PARENT_NAME" = "base" ]; then
+                    EXAMPLE_NAMES+=("base/$EXAMPLE_NAME")
+                elif [ "$PARENT_NAME" = "env_var_types" ]; then
+                    EXAMPLE_NAMES+=("env_var_types/$EXAMPLE_NAME")
+                else
                     EXAMPLE_NAMES+=("$EXAMPLE_NAME")
+                fi
                     EXAMPLE_STATUSES+=("失败")
                     EXAMPLE_ERRORS+=("代码生成失败")
                     cd - > /dev/null
@@ -150,7 +196,14 @@ for example in $EXAMPLES; do
                 fi
             else
                 FAILURE_COUNT=$((FAILURE_COUNT+1))
-                EXAMPLE_NAMES+=("$EXAMPLE_NAME")
+                # 如果是 base 或 env_var_types 目录下的示例，显示完整路径
+                if [ "$PARENT_NAME" = "base" ]; then
+                    EXAMPLE_NAMES+=("base/$EXAMPLE_NAME")
+                elif [ "$PARENT_NAME" = "env_var_types" ]; then
+                    EXAMPLE_NAMES+=("env_var_types/$EXAMPLE_NAME")
+                else
+                    EXAMPLE_NAMES+=("$EXAMPLE_NAME")
+                fi
                 EXAMPLE_STATUSES+=("失败")
                 EXAMPLE_ERRORS+=("代码生成失败：未找到结构体")
                 cd - > /dev/null
@@ -159,7 +212,12 @@ for example in $EXAMPLES; do
             fi
         else
             FAILURE_COUNT=$((FAILURE_COUNT+1))
-            EXAMPLE_NAMES+=("$EXAMPLE_NAME")
+            # 如果是 base 目录下的示例，显示完整路径
+            if [ "$PARENT_NAME" = "base" ]; then
+                EXAMPLE_NAMES+=("base/$EXAMPLE_NAME")
+            else
+                EXAMPLE_NAMES+=("$EXAMPLE_NAME")
+            fi
             EXAMPLE_STATUSES+=("失败")
             EXAMPLE_ERRORS+=("代码生成失败")
             cd - > /dev/null
@@ -181,7 +239,16 @@ for example in $EXAMPLES; do
     if [ $BUILD_STATUS -ne 0 ]; then
         echo -e "${RED}✘ 编译失败: ${EXAMPLE_NAME}${NC}"
         FAILURE_COUNT=$((FAILURE_COUNT+1))
-        EXAMPLE_NAMES+=("$EXAMPLE_NAME")
+        # 如果是 base、env_var_types 或 default_value_types 目录下的示例，显示完整路径
+        if [ "$PARENT_NAME" = "base" ]; then
+            EXAMPLE_NAMES+=("base/$EXAMPLE_NAME")
+        elif [ "$PARENT_NAME" = "env_var_types" ]; then
+            EXAMPLE_NAMES+=("env_var_types/$EXAMPLE_NAME")
+        elif [ "$PARENT_NAME" = "default_value_types" ]; then
+            EXAMPLE_NAMES+=("default_value_types/$EXAMPLE_NAME")
+        else
+            EXAMPLE_NAMES+=("$EXAMPLE_NAME")
+        fi
         EXAMPLE_STATUSES+=("失败")
         EXAMPLE_ERRORS+=("编译失败")
         cd - > /dev/null
@@ -218,13 +285,31 @@ for example in $EXAMPLES; do
     if [ $RUN_STATUS -ne 0 ]; then
         echo -e "${RED}✘ 运行失败: ${EXAMPLE_NAME}${NC}"
         FAILURE_COUNT=$((FAILURE_COUNT+1))
-        EXAMPLE_NAMES+=("$EXAMPLE_NAME")
+        # 如果是 base、env_var_types 或 default_value_types 目录下的示例，显示完整路径
+        if [ "$PARENT_NAME" = "base" ]; then
+            EXAMPLE_NAMES+=("base/$EXAMPLE_NAME")
+        elif [ "$PARENT_NAME" = "env_var_types" ]; then
+            EXAMPLE_NAMES+=("env_var_types/$EXAMPLE_NAME")
+        elif [ "$PARENT_NAME" = "default_value_types" ]; then
+            EXAMPLE_NAMES+=("default_value_types/$EXAMPLE_NAME")
+        else
+            EXAMPLE_NAMES+=("$EXAMPLE_NAME")
+        fi
         EXAMPLE_STATUSES+=("失败")
         EXAMPLE_ERRORS+=("运行失败")
     else
         echo -e "${GREEN}✓ 测试成功: ${EXAMPLE_NAME}${NC}"
         SUCCESS_COUNT=$((SUCCESS_COUNT+1))
-        EXAMPLE_NAMES+=("$EXAMPLE_NAME")
+        # 如果是 base、env_var_types 或 default_value_types 目录下的示例，显示完整路径
+        if [ "$PARENT_NAME" = "base" ]; then
+            EXAMPLE_NAMES+=("base/$EXAMPLE_NAME")
+        elif [ "$PARENT_NAME" = "env_var_types" ]; then
+            EXAMPLE_NAMES+=("env_var_types/$EXAMPLE_NAME")
+        elif [ "$PARENT_NAME" = "default_value_types" ]; then
+            EXAMPLE_NAMES+=("default_value_types/$EXAMPLE_NAME")
+        else
+            EXAMPLE_NAMES+=("$EXAMPLE_NAME")
+        fi
         EXAMPLE_STATUSES+=("成功")
         EXAMPLE_ERRORS+=("无")
     fi

@@ -1,0 +1,19 @@
+{{ define "usage" }}
+// UsageTmpl 是用于生成 Usage 函数的模板
+func (c *{{ .StructName }}) Usage() {
+	fmt.Println(`USAGE:
+  myapp {{ if .HasSubcommands }}[SUBCOMMAND] {{ end }}[OPTIONS]{{ if .HasArgsField }} [ARGS]{{ end }}
+{{ if .HasSubcommands }}
+SUBCOMMANDS:
+{{ range .Subcommands }}    {{ .Name }}    {{ .Usage }}
+{{ end }}{{ end }}
+OPTIONS:
+    -c, --config    指定配置文件路径 (支持 JSON, YAML, TOML)
+    -h, --help      显示帮助信息
+{{ range .Fields }}{{ if not .IsNested }}{{ if or .Short .Long }}    {{ if .Short }}-{{ .Short }}{{ end }}{{ if and .Short .Long }}, {{ end }}{{ if .Long }}--{{ .Long }}{{ end }}    {{ .Usage }}{{ if .EnvVar }} [env: {{ .EnvVar }}]{{ end }}{{ if .Default }} (default: {{ .Default }}){{ end }}
+{{ end }}{{ end }}{{ end }}{{ if .HasArgsField }}
+ARGS:
+{{ range .Fields }}{{ if .Args }}    {{ if .ArgName }}{{ .ArgName }}{{ else }}{{ .Name }}{{ end }}    {{ .Usage }}{{ if .Default }} (default: {{ .Default }}){{ end }}
+{{ end }}{{ end }}{{ end }}`)
+}
+{{ end }}

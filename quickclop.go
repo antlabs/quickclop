@@ -1,8 +1,11 @@
 package quickclop
 
 import (
+	"bytes"
+	"embed"
 	"fmt"
 	"go/ast"
+	"go/format"
 	"go/parser"
 	"go/token"
 	"log"
@@ -11,7 +14,19 @@ import (
 	"regexp"
 	"strings"
 	"text/template"
+
+	_ "embed"
+
+	"github.com/antlabs/quickclop/tmpl"
 )
+
+type FieldInfo = tmpl.FieldInfo
+
+//go:embed tmpl/*
+var tmplFS embed.FS
+
+// Initialize templates
+var clopTemplate = template.Must(template.ParseFS(tmplFS, "tmpl/*.tmpl"))
 
 // 解析字段标签
 func parseTag(tag string) map[string]string {
@@ -228,27 +243,6 @@ func generateOutputFilePath(inputPath string) string {
 	return filepath.Join(dir, name+"_clop.go")
 }
 
-// FieldInfo 存储字段信息
-type FieldInfo struct {
-	Name       string // 字段名称
-	Type       string // 字段类型
-	Tag        string // 原始标签
-	Short      string // 短选项，如 -h
-	Long       string // 长选项，如 --help
-	Usage      string // 使用说明
-	Default    string // 默认值
-	Args       bool   // 是否为位置参数
-	Required   bool   // 是否必需
-	IsNested   bool   // 是否为嵌套结构体
-	ParseFunc  string // 解析函数名
-	structType *ast.StructType
-	CmdName    string
-	ArgName    string // 新增字段，用于存储参数名称
-	EnvVar     string // 新增字段，用于存储环境变量名
-	ConfigKey  string // 配置文件中的键名
-	Completion string // 补全脚本的类型，例如 "file", "dir", "custom"
-}
-
 // 解析字段
 func parseField(field *ast.Field, file *ast.File, fset *token.FileSet) FieldInfo {
 	info := FieldInfo{}
@@ -314,7 +308,16 @@ func parseField(field *ast.Field, file *ast.File, fset *token.FileSet) FieldInfo
 
 				// 解析短选项和长选项
 				if strings.Contains(clopTag, "-") && !strings.HasPrefix(clopTag, "args") {
-					parts := strings.Split(clopTag, ";")
+					// 支持分号和逗号作为分隔符
+					var parts []string
+					if strings.Contains(clopTag, ";") {
+						parts = strings.Split(clopTag, ";")
+					} else if strings.Contains(clopTag, ",") {
+						parts = strings.Split(clopTag, ",")
+					} else {
+						parts = []string{clopTag}
+					}
+					
 					for _, part := range parts {
 						part = strings.TrimSpace(part)
 						if strings.HasPrefix(part, "-") && !strings.HasPrefix(part, "--") {
@@ -434,7 +437,7 @@ func parseField(field *ast.Field, file *ast.File, fset *token.FileSet) FieldInfo
 		// 查找结构体定义
 		structDef := findStructDef(info.Type, file, fset.Position(field.Pos()).Filename, "")
 		if structDef != nil {
-			info.structType = structDef
+			info.StructType = structDef
 			info.IsNested = true
 		}
 	}
@@ -596,10 +599,10 @@ func generateCode(structName string, structType *ast.StructType, outputFile stri
 
 	for _, field := range structType.Fields.List {
 		info := parseField(field, file, fset)
-		if info.IsNested && info.structType != nil {
+		if info.IsNested && info.StructType != nil {
 			// 解析子命令的字段
 			var subFields []FieldInfo
-			for _, subField := range info.structType.Fields.List {
+			for _, subField := range info.StructType.Fields.List {
 				subInfo := parseField(subField, file, fset)
 				subInfo.CmdName = info.Name
 				subFields = append(subFields, subInfo)
@@ -652,9 +655,9 @@ func generateCode(structName string, structType *ast.StructType, outputFile stri
 		}
 
 		// 数值类型需要 strconv 包（用于命令行参数解析）
-		if strings.Contains(field.Type, "int") || 
-		   strings.Contains(field.Type, "float") || 
-		   strings.Contains(field.Type, "uint") {
+		if strings.Contains(field.Type, "int") ||
+			strings.Contains(field.Type, "float") ||
+			strings.Contains(field.Type, "uint") {
 			needStrconv = true
 		}
 
@@ -792,9 +795,20 @@ func generateCode(structName string, structType *ast.StructType, outputFile stri
 	}
 	defer f.Close()
 
+	var out bytes.Buffer
 	// 执行模板
-	if err := clopTemplate.Execute(f, data); err != nil {
+	if err := clopTemplate.ExecuteTemplate(&out, "main", data); err != nil {
 		return fmt.Errorf("生成代码失败: %w", err)
+	}
+
+	formatCode, err := format.Source(out.Bytes())
+	if err != nil {
+		return fmt.Errorf("格式化代码失败: %w", err)
+	}
+	// 写入文件
+
+	if _, err := f.Write(formatCode); err != nil {
+		return fmt.Errorf("写入文件失败: %w", err)
 	}
 
 	return nil
@@ -832,10 +846,10 @@ func generateCompletionScript(structName string, structType *ast.StructType, out
 
 	for _, field := range structType.Fields.List {
 		info := parseField(field, file, fset)
-		if info.IsNested && info.structType != nil {
+		if info.IsNested && info.StructType != nil {
 			// 解析子命令的字段
 			var subFields []FieldInfo
-			for _, subField := range info.structType.Fields.List {
+			for _, subField := range info.StructType.Fields.List {
 				subInfo := parseField(subField, file, fset)
 				subInfo.CmdName = info.Name
 				subFields = append(subFields, subInfo)
